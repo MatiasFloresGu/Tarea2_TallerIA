@@ -19,7 +19,7 @@ for i, fila in enumerate(matriz):
 alpha = 0.1# Tasa de aprendizaje: Controla cuánto se actualiza el valor Q en cada paso.
 gamma = 0.9# Factor de descuento: Determina la importancia de las recompensas futuras.
 epsilon = 0.1# Probabilidad de exploración: elegir una acción aleatoria en lugar de la óptima
-repe = 500 #repeticiones
+repe = 10000 #repeticiones
 
 Q = {}
 
@@ -87,6 +87,7 @@ while indice < n_elementos:
     indice += 1
 
 #Resultados
+print(f"\nPeso Maximo:{max_peso}")
 print("\nMejor combinación encontrada:")
 for indice_E, valor_M, peso_M in mochila:
     print(f"Elemento {indice_E}: Valor= {valor_M} / Peso= {peso_M}")
