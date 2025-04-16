@@ -1,91 +1,76 @@
 import numpy as np
-import random
+import gym
+from gym import spaces
 
-# Mapa original con A y B
-original_map = [
-    [5, 3, 'A', 2, 8, 1, 6, 4, 9, 2],
-    [3, 8, 4, 1, 9, 5, 2, 7, 6, 3],
-    [6, 1, 9, 7, 3, 4, 8, 5, 2, 1],
-    [2, 5, 8, 3, 6, 9, 1, 4, 7, 5],
-    [4, 7, 1, 5, 2, 8, 3, 9, 6, 4],
-    [9, 2, 6, 4, 1, 7, 5, 3, 8, 2],
-    [1, 6, 3, 9, 5, 2, 7, 8, 4, 1],
-    [7, 4, 2, 8, 6, 3, 9, 1, 5, 7],
-    [8, 9, 5, 6, 4, 1, 2, 3, 7, 8],
-    [7, 3, 7, 2, 9, 5, 4, 6, 1, 'B']
-]
+class GridEnvironment(gym.Env):
+    def __init__(self):
+        super(GridEnvironment, self).__init__()
+        self.grid_size = 5
+        self.state = (0, 0)  # Estado inicial
+        self.goal = (4, 4)  # Objetivo
+        self.restricted_zones = [(2, 2), (3, 3), (3,4)]  # Zonas restringidas
+        
+        # Espacio de acciones: mover arriba, abajo, izquierda, derecha
+        self.action_space = spaces.Discrete(4)
+        # Espacio de observaciones: posición actual del agente
+        self.observation_space = spaces.Box(low=0, high=self.grid_size-1, shape=(2,), dtype=np.int32)
 
-# Convertimos A y B a valores numéricos
-map_grid = []
-start_pos = None
-end_pos = None
-
-for i, row in enumerate(original_map):
-    map_row = []
-    for j, val in enumerate(row):
-        if val == 'A':
-            start_pos = (i, j)
-            map_row.append(0)  # Recompensa de inicio
-        elif val == 'B':
-            end_pos = (i, j)
-            map_row.append(100)  # Gran recompensa por llegar
+    def step(self, action):
+        x, y = self.state
+        if action == 0 and y > 0:  # Mover arriba
+            y -= 1
+        elif action == 1 and y < self.grid_size - 1:  # Mover abajo
+            y += 1
+        elif action == 2 and x > 0:  # Mover izquierda
+            x -= 1
+        elif action == 3 and x < self.grid_size - 1:  # Mover derecha
+            x += 1
+        
+        new_state = (x, y)
+        reward = -1  # Penalización por cada paso
+        
+        # Comprobación de restricciones
+        if new_state in self.restricted_zones:
+            reward = -10  # Penalización alta por entrar en zonas restringidas
+            new_state = self.state  # Mantener el estado anterior
+        
+        # Comprobación de objetivo alcanzado
+        if new_state == self.goal:
+            reward = 100
+            done = True
         else:
-            map_row.append(val)
-    map_grid.append(map_row)
+            done = False
+        
+        self.state = new_state
+        return np.array(self.state), reward, done, {}
 
-map_grid = np.array(map_grid)
+    def reset(self):
+        self.state = (0, 0)
+        return np.array(self.state)
 
-# Parámetros Q-learning
-rows, cols = map_grid.shape
-q_table = np.zeros((rows, cols, 4))  # 4 acciones: 0=up, 1=down, 2=left, 3=right
-learning_rate = 0.1
-discount = 0.9
-epsilon = 0.1  # exploración
+    def render(self, mode="human"):
+        for i in range(self.grid_size):
+            row = ""
+            for j in range(self.grid_size):
+                if (i, j) == self.state:
+                    row += "A "  # Representa al agente
+                elif (i, j) == self.goal:
+                    row += "G "  # Representa el objetivo
+                elif (i, j) in self.restricted_zones:
+                    row += "X "  # Representa las zonas restringidas
+                else:
+                    row += ". "
+            print(row)
+        print()
 
-# Movimientos: (dx, dy)
-actions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # up, down, left, right
+# Ejemplo de uso
+env = GridEnvironment()
+state = env.reset()
+done = False
 
-def is_valid(x, y):
-    return 0 <= x < rows and 0 <= y < cols
+while not done:
+    action = env.action_space.sample()  # Seleccionar acción aleatoria
+    state, reward, done, _ = env.step(action)
+    env.render()
 
-# Entrenamiento
-for episode in range(1000):
-    x, y = start_pos
-    while (x, y) != end_pos:
-        # Elegir acción
-        if random.uniform(0, 1) < epsilon:
-            action = random.randint(0, 3)  # Explorar
-        else:
-            action = np.argmax(q_table[x, y])  # Explotar
-
-        dx, dy = actions[action]
-        nx, ny = x + dx, y + dy
-
-        if not is_valid(nx, ny):
-            continue  # No salir del mapa
-
-        reward = map_grid[nx, ny]
-        next_max = np.max(q_table[nx, ny])
-        # Actualización Q
-        q_table[x, y, action] += learning_rate * (reward + discount * next_max - q_table[x, y, action])
-
-        x, y = nx, ny
-
-# Seguimos la política aprendida desde A hasta B
-path = [start_pos]
-x, y = start_pos
-while (x, y) != end_pos:
-    action = np.argmax(q_table[x, y])
-    dx, dy = actions[action]
-    nx, ny = x + dx, y + dy
-
-    if not is_valid(nx, ny):
-        break  # evitar loops infinitos en errores
-
-    path.append((nx, ny))
-    x, y = nx, ny
-
-# Imprimimos el camino y el total de puntos acumulados
-total_score = sum(map_grid[x][y] for x, y in path)
-print("Camino óptimo:", path)
-print("Score total acumulado:", total_score)
+print("Episodio terminado.")
